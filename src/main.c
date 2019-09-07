@@ -16,9 +16,12 @@
 #define START_AT_MIN 0
 
 enum sort_type {
-    SORT_ALPHABETICAL,
-    SORT_BY_DATE
+    ORIGINAL_ORDER,
+    ALPHABETICAL_ORDER,
+    DATE_ORDER
 };
+
+// TODO: allow option to reverse ordering
 
 static void app_help () {
     printf ("app_help ()\n");
@@ -30,7 +33,7 @@ int main (int argc, char *argv[]) {
     char *start_at_optarg_end;
 
     int start_at = 1;
-    int sort_method = SORT_ALPHABETICAL;
+    int sort_method = ORIGINAL_ORDER;
 
     static struct option long_options[] =  {
         {"date",       no_argument,       0, 'd' },
@@ -43,10 +46,10 @@ int main (int argc, char *argv[]) {
         switch (opt)
             {
             case 'd':
-                sort_method = SORT_BY_DATE;
+                sort_method = DATE_ORDER;
                 break;
             case 'a':
-                sort_method = SORT_ALPHABETICAL;
+                sort_method = ALPHABETICAL_ORDER;
                 break;
             case 's':
                 start_at  = strtoul (optarg, &start_at_optarg_end, 10);
@@ -76,10 +79,13 @@ int main (int argc, char *argv[]) {
     }
 
     switch (sort_method) {
-    case (SORT_ALPHABETICAL):
+    case (ORIGINAL_ORDER):
+        iprintf ("Files will not be sorted (wildcards will be expanded in alphabetical order).\n");
+        break;
+    case (ALPHABETICAL_ORDER):
         iprintf ("Files will be sorted alphabetically.\n");
         break;
-    case (SORT_BY_DATE):
+    case (DATE_ORDER):
         iprintf ("Files will be sorted by date.\n");
         break;
     default:
@@ -87,24 +93,24 @@ int main (int argc, char *argv[]) {
         return EINVALID_ARGS;
     }
 
+    // Calculate number of additional arguments we have that represent
+    // files
     int num_extra_args = argc - optind;
-
     if (num_extra_args < 1) {
         eprintf("We require some files to be enumerated!\n");
         return EINVALID_ARGS;
     }
 
-    // Expand any wildcards and store the list of all files in a
+    // Expand any wildcards (glob () automatically expands these in
+    // alphabetical order) and store the list of all files in a
     // glob. Note that, depending on the shell, the wildcards may have
     // been handled already.
 
     glob_t globbuf;
 
     for (int i = optind; i < argc; i++) {
-        int result = glob (argv[i], (i > optind) ? GLOB_APPEND : 0, NULL, &globbuf);
+        int result = glob (argv[i], GLOB_MARK | (i > optind ? GLOB_APPEND : 0), NULL, &globbuf);
         if (result != 0) {
-            // TODO: if result is non-zero, does this mean that globbuf is untouched?
-
             char error_reason[50];
             switch (result) {
             case GLOB_ABORTED:
@@ -118,7 +124,7 @@ int main (int argc, char *argv[]) {
                 break;
             }
 
-            wprintf ("Ignoring file pattern '%s', as %s.\n", argv[i], error_reason);
+            wprintf ("Problem accessing file/file pattern '%s', as %s.\n", argv[i], error_reason);
         }
     }
 
@@ -127,8 +133,13 @@ int main (int argc, char *argv[]) {
         printf ("%s\n", globbuf.gl_pathv[i]);
     }
 
-    // TODO: Remove duplicated files in list (determined by their inodes/device numbers)
+    // TODO: Remove duplicated files in list (determined by their
+    // inodes/device numbers)
+
     // TODO: Ignore files that are symlinks
+
+    // TODO: Ignore directories
+
     // TODO: Check final value is not as large as UINT_MAX
 
     globfree (&globbuf);
